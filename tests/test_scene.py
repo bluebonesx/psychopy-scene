@@ -1,6 +1,8 @@
-from psychopy.visual import TextStim
 from psychopy import core
+from psychopy.visual import TextStim
+
 from psychopy_scene import Drawable
+
 from . import util
 
 
@@ -25,18 +27,18 @@ def test_close_on():
     stim = TextStim(ctx.win)
 
     _ = ctx.scene(close_on="key_space")(lambda: stim)
-    assert _.callbacks["key_space"] == _.close
+    assert _.listeners["key_space"] == _.close
 
     nums = [1, 2, 3]
     _ = ctx.scene(close_on=(f"key_{k}" for k in nums))(lambda: stim)
     for k in nums:
-        assert _.callbacks[f"key_{k}"] == _.close
+        assert _.listeners[f"key_{k}"] == _.close
 
     _ = ctx.scene(close_on=("key_q", "mouse_middle"))(lambda: stim)
     _.config(close_on=["scene_drawn"])
-    assert _.callbacks["key_q"] == _.close
-    assert _.callbacks["mouse_middle"] == _.close
-    assert _.callbacks["scene_drawn"] == _.close
+    assert _.listeners["key_q"] == _.close
+    assert _.listeners["mouse_middle"] == _.close
+    assert _.listeners["scene_drawn"] == _.close
 
     util.except_error(lambda: ctx.scene(close_on="key_e_"), ValueError)
     util.except_error(lambda: ctx.scene(close_on="ke_space"), ValueError)

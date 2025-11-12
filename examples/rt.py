@@ -1,6 +1,8 @@
-from psychopy_scene import Context, Event
-from psychopy import data
 import random
+
+from psychopy import data
+
+from psychopy_scene import Context, Event
 
 handler = data.TrialHandler(
     trialList=random.sample(range(100), 10), nReps=1, method="sequential"
@@ -11,8 +13,9 @@ def simple_rt(ctx: Context):
     """
     Simple reaction time task.
     """
-    from psychopy.visual import TextStim
     import random
+
+    from psychopy.visual import TextStim
 
     stim = TextStim(ctx.win)
 
@@ -43,8 +46,9 @@ def identification_rt(ctx: Context):
     """
     Identification reaction time task.
     """
-    from psychopy.visual import TextStim
     import random
+
+    from psychopy.visual import TextStim
 
     colors = ["red", "green"]
     stim = TextStim(ctx.win)
@@ -81,8 +85,9 @@ def selection_rt(ctx: Context):
     """
     Selection reaction time task.
     """
-    from psychopy.visual import TextStim
     import random
+
+    from psychopy.visual import TextStim
 
     key_color_map = {"f": "green", "j": "red"}
     stim = TextStim(ctx.win)
@@ -115,5 +120,5 @@ def selection_rt(ctx: Context):
             text=str(text),
             color=color,
             rt=evts[-1].timestamp - reaction.get("show_time") if evts else "",
-            correct=key_color_map[evts[-1].key.value] == color if evts else "",  # type: ignore
+            correct=key_color_map[evts[-1].value.value] == color if evts else "",  # type: ignore
         )

@@ -163,7 +163,7 @@ def demo():
 demo.show()
 close_event = demo.get("events")[-1]
 close_key = close_event.key.value
-close_time = close_event.timestamp - demo.get('show_time')
+close_time = close_event.rt
 ```
 
 我们还可以手动收集数据：

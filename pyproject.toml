@@ -1,20 +1,19 @@
 [project]
 name = "psychopy-scene"
-version = "0.1.1"
-authors = [
-  { name = "cubx", email = "shawn6304@qq.com" }
-]
-description = "Lightweight experiment framework for PsychoPy"
+version = "0.1.2"
+authors = [{ name = "cubx", email = "shawn6304@qq.com" }]
+description = "Lightweight framework for PsychoPy"
 readme = "README.md"
-requires-python = ">=3.10"
+requires-python = ">=3.8"
 classifiers = [
-  "Programming Language :: Python :: 3",
-  "Programming Language :: Python :: 3.10",
+  "Programming Language :: Python :: 3.8",
   "Operating System :: OS Independent",
   "Topic :: Scientific/Engineering",
   "License :: OSI Approved :: GNU General Public License v3 or later (GPLv3+)",
 ]
-urls.repository = "https://github.com/bluebones-team/psychopy-scene"
+urls.repository = "https://github.com/bluebonesx/psychopy-scene"
+dependencies = []
+optional-dependencies.type-hints = ["typing_extensions", "psychopy"]
 
 [build-system]
 requires = ["setuptools>=61.0"]
@@ -22,3 +21,9 @@ build-backend = "setuptools.build_meta"
 
 [tool.setuptools.packages.find]
 where = [""]
+include = ["psychopy_scene"]
+
+[tool.pyright]
+typeCheckingMode = 'standard'
+
+[tool.pytest]

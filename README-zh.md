@@ -5,10 +5,10 @@
 
 [English](README.md) | 简体中文
 
-本项目是基于 [PsychoPy](https://github.com/psychopy/psychopy) 的轻量级实验框架，源码仅 **200 行**。
+基于 [PsychoPy](https://github.com/psychopy/psychopy) 的轻量级实验框架，源码仅 **200 行**。
 
 > [!NOTE]
-> 本项目旨于提供构建 PsychoPy 实验的新方式，仅提供基础 API，并鼓励开发者对本项目进行二次开发。
+> 本项目处于早期开发阶段，使用时请固定版本号。
 
 ## 特性
 
@@ -22,8 +22,6 @@
 pip install psychopy-scene
 ```
 
-或直接复制 `psychopy_scene` 文件夹到项目根目录。
-
 ## 快速上手
 
 ### 实验上下文
@@ -32,32 +30,11 @@ pip install psychopy-scene
 编写实验的第一步，就是创建实验上下文。
 
 ```python
+from psychopy import visual, data
 from psychopy_scene import Context
-from psychopy.visual import Window
-from psychopy.monitors import Monitor
-from psychopy.data import ExperimentHandler
 
-# create monitor
-monitor = Monitor(
-    name="testMonitor",
-    width=52.65,
-    distance=57,
-)
-monitor.setSizePix((1920, 1080))
-
-# create window
-win = Window(
-    monitor=monitor,
-    units="deg",
-    fullscr=False,
-    size=(800, 600),
-)
-
-# create experiment context
-ctx = Context(
-    win,
-    exp=ExperimentHandler(extraInfo={"subject": "test"}),
-)
+win = visual.Window()
+ctx = Context(win, exp=data.ExperimentHandler())
 ```
 
 ### 画面
@@ -78,11 +55,11 @@ ctx = Context(
 创建画面仅需 1 个接受刺激参数并返回刺激的函数即可：
 
 ```python
-from psychopy.visual import TextStim
+from psychopy import visual
 
 # create stimulus
-stim_1 = TextStim(ctx.win, text="Hello")
-stim_2 = TextStim(ctx.win, text="World")
+stim_1 = visual.TextStim(ctx.win, text="Hello")
+stim_2 = visual.TextStim(ctx.win, text="World")
 
 # create scene
 @ctx.scene(
@@ -125,17 +102,17 @@ demo = ctx.scene(on_key_f=lambda: demo.close()) # or
 demo = ctx.scene().on("key_f", lambda: demo.close())
 ```
 
-> [!NOTE]
+> [!WARNING]
 > 每种事件只能有一个回调函数，重复添加将报错。
 
 用于设置回调函数的参数名都遵循`on_[type]_[name]`的格式。
 目前画面支持的事件有：
 
-| 类型  | 名称                                    |
-| ----- | --------------------------------------- |
-| scene | setup、drawn、frame                     |
-| key   | any、其余和`Keyboard.getKeys`返回值一样 |
-| mouse | left、right、middle                     |
+| 类型  | 名称                          |
+| ----- | ----------------------------- |
+| scene | setup、drawn、frame           |
+| key   | any、`keyboard.KeyPress` 取值 |
+| mouse | left、right、middle           |
 
 这些事件将在`show`方法执行后按顺序触发：
 
@@ -151,7 +128,7 @@ c -->|是| on_scene_frame --> 再次绘制 --> _["on_key_[name]<br>on_mouse_[nam
 画面呈现过程中会自动收集数据：
 | 名称 | 描述 |
 | --------- | ---------------------------- |
-| show_time | 首次绘制的时间戳 |
+| show_time | 首次 filp 时间戳 |
 | events | 交互事件列表：键盘事件和鼠标事件 |
 
 我们可以通过 `scene.get` 访问这些数据：
@@ -161,21 +138,23 @@ c -->|是| on_scene_frame --> 再次绘制 --> _["on_key_[name]<br>on_mouse_[nam
 def demo():
     return stim
 demo.show()
+
 close_event = demo.get("events")[-1]
-close_key = close_event.key.value
-close_time = close_event.timestamp - demo.get('show_time')
+close_key = close_event.data # keyboard.KeyPress
+close_time = demo.get("show_time") + close_event.rt
 ```
 
 我们还可以手动收集数据：
 
 ```python
 @ctx.scene(
-    on_key_f=lambda: demo.set('rt', core.getTime() - demo.get('show_time')),
+    on_key_f=lambda: demo.set('pressed_duration', demo.get('events')[-1].data.duration)),
 )
 def demo():
     return stim
 demo.show()
-rt = demo.get('rt')
+
+duration = demo.get('pressed_duration')
 ```
 
 ## 快捷方法
@@ -184,53 +163,37 @@ rt = demo.get('rt')
 
 ```python
 ctx.text('Welcome to the experiment!', pos=(0, 0)).show() # show static text
-ctx.fixation(1).show()
-ctx.blank(1).show()
-ctx.addRow(a='', b=1, c=True) # collect data to ExperimentHandler
+ctx.record(a='', b=1, c=True) # record a row to ExperimentHandler
 ```
 
-## 最佳实践
+## 示例
 
-### 上下文和任务分离
-
-推荐以函数形式编写任务，将实验上下文作为第一参数传入，其余参数作为任务的特有参数。
+### Trial
 
 ```python
 from psychopy_scene import Context
+from psychopy import visual
 
-def task(ctx: Context, duration: float):
-    from psychopy.visual import TextStim
-
-    stim = TextStim(ctx.win, text="")
+def task(ctx: Context, duration = 1):
+    stim = visual.TextStim(ctx.win, text="")
     scene = ctx.scene(duration, on_scene_setup=lambda: stim)
     scene.show()
-    ctx.addRow(time=scene.get('show_time'))
+    ctx.record(time=scene.get('show_time'))
 ```
 
-### 只关注任务相关的逻辑
-
-任务函数不应包含任何与任务本身无关的逻辑，例如：
-
-- 指导语和结束语
-- block 数量
-- 数据处理、分析、结果展示
-
-如果 block 间不存在数据依赖的话，建议一个任务函数只呈现一个 block。
-对于需要呈现多个 block 的实验，考虑以下示例：
+### Block
 
 ```python
 from psychopy_scene import Context
-from psychopy.visual import Window
+from psychopy import visual
 
 def task(ctx: Context):
-    from psychopy.visual import TextStim
-
-    stim = TextStim(ctx.win, text="")
+    stim = visual.TextStim(ctx.win, text="")
     scene = ctx.scene(1, on_scene_setup=lambda: stim)
     scene.show()
-    ctx.addRow(time=scene.get('show_time'))
+    ctx.record(time=scene.get('show_time'))
 
-win = Window()
+win = visual.Window()
 data = []
 for block_index in range(10):
     ctx = Context(win)

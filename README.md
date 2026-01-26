@@ -5,86 +5,61 @@
 
 English | [简体中文](README-zh.md)
 
-This project is a lightweight experiment framework for [PsychoPy](https://github.com/psychopy/psychopy), source code only **200 lines**.
+Lightweight experimental framework based on [PsychoPy](https://github.com/psychopy/psychopy), with only **200 lines** of source code.
 
 > [!NOTE]
-> this project aim to provide a new way to build PsychoPy experiments, only provide the basic API and encourage developers to develop on top of this project.
+> The project is in early development. Please pin the version when using it.
 
 ## Features
 
-- Lightweight: Only 1 file, no extra dependencies
-- Type-safe: All parameters are type annotated
-- Newcomer-friendly: Only the concepts of `Context` and `Scene` are required to get started.
+- Lightweight: only one file, no extra dependencies
+- Type-safe: all parameters use type annotations
+- Beginner-friendly: only requires understanding `Context` and `Scene`
 
-## Install
+## Installation
 
 ```bash
 pip install psychopy-scene
 ```
 
-or copy the `psychopy_scene` folder directly to the root directory of your project.
+## Quick Start
 
-## Get Started
+### Experiment Context
 
-### Context
-
-Experiment context `Context` means this experiment's global settings,
-including environment parameters and task parameters.
-The first step to writing an experiment is to create an experiment context.
+The experiment context `Context` represents the global parameters of the experiment, including environment parameters and task parameters.  
+The first step of writing an experiment is to create the experiment context:
 
 ```python
+from psychopy import visual, data
 from psychopy_scene import Context
-from psychopy.visual import Window
-from psychopy.monitors import Monitor
-from psychopy.data import ExperimentHandler
 
-# create monitor
-monitor = Monitor(
-    name="testMonitor",
-    width=52.65,
-    distance=57,
-)
-monitor.setSizePix((1920, 1080))
-
-# create window
-win = Window(
-    monitor=monitor,
-    units="deg",
-    fullscr=False,
-    size=(800, 600),
-)
-
-# create experiment context
-ctx = Context(
-    win,
-    exp=ExperimentHandler(extraInfo={"subject": "test"}),
-)
+win = visual.Window()
+ctx = Context(win, exp=data.ExperimentHandler())
 ```
 
-### Scene
+### Scenes
 
-The experiment can be seen as a composition of a series of scenes,
-only 2 steps are required to write an experiment program:
+An experiment can be considered as a sequence of scenes. Writing an experiment involves two steps:
 
-1. create scene
-2. write scene presentation logic
+1. Creating scenes
+2. Writing scene presentation logic
 
-scene provides some configuration parameters:
+Scenes provide configuration parameters such as:
 
-- `duration`：seconds unit
-- `close_on`：the [event](#event) to close scene, such as `key_f` means pressing the `f` key to close the scene
-- `on_key_[name]`：when the keyboard key is pressed, execute the function
-- `on_mouse_[name]`：when the mouse button is clicked, execute the function
-- `on_scene_[name]`：when the scene reaches a specific stage, execute the function
+- `duration`: duration in seconds
+- `close_on`: names of [events](#events) that close the scene (e.g., `key_f` closes the scene on F key press)
+- `on_key_[name]`: callback on specific keyboard key press
+- `on_mouse_[name]`: callback on specific mouse button press
+- `on_scene_[name]`: callback at specific phases of the scene lifecycle
 
-Creating a scene only requires a function that accepts stimulus parameters and returns the stimulus:
+Creating a scene only requires a function that receives parameters and returns stimuli:
 
 ```python
-from psychopy.visual import TextStim
+from psychopy import visual
 
 # create stimulus
-stim_1 = TextStim(ctx.win, text="Hello")
-stim_2 = TextStim(ctx.win, text="World")
+stim_1 = visual.TextStim(ctx.win, text="Hello")
+stim_2 = visual.TextStim(ctx.win, text="World")
 
 # create scene
 @ctx.scene(
@@ -95,7 +70,7 @@ stim_2 = TextStim(ctx.win, text="World")
     on_scene_drawn=lambda: print("it will be called after first drawing"),
     on_scene_frame=lambda: print("it will be called each frame"),
 )
-def demo(color: str, ori: float): # it will be used as on_scene_setup
+def demo(color: str, ori: float): # used as on_scene_setup
     print('it will be called before first drawing')
     stim_1.color = color
     stim_2.ori = ori
@@ -105,7 +80,7 @@ def demo(color: str, ori: float): # it will be used as on_scene_setup
 demo.show(color="red", ori=45)
 ```
 
-scene can also be configured dynamically, it is useful in some cases, such as presentations with variable duration:
+Scenes can also be configured dynamically, useful for cases where the display duration is not fixed:
 
 ```python
 @ctx.scene()
@@ -114,12 +89,12 @@ def demo():
 demo.config(duration=0.5).show()
 ```
 
-this `ctx.scene` method is a shortcut for `demo.config`, so they are equivalent.
+`demo.config` is equivalent to calling `ctx.scene` with the same parameters.
 
-### Event
+### Events
 
-An event represents a specific moment in the program's running, such as pressing a key or clicking the mouse.
-To execute some operation when an event occurs, we need to add a callback function for it:
+Events represent specific runtime moments, such as key presses or mouse clicks.  
+To perform operations on events, callbacks must be registered:
 
 ```python
 demo = ctx.scene(close_on="key_f") # or
@@ -127,117 +102,99 @@ demo = ctx.scene(on_key_f=lambda: demo.close()) # or
 demo = ctx.scene().on("key_f", lambda: demo.close())
 ```
 
-> [!NOTE]
-> each event can only have one callback function, adding repeatedly will raise an error.
+> [!WARNING]
+> Each event can have only one callback. Adding a duplicate will raise an error.
 
-each callback parameter name should follow the format `on_[type]_[name]`.
-Now we support the following events:
+Callback naming follows `on_[type]_[name]`.  
+Currently supported event types:
 
-| type  | name                                                      |
-| ----- | --------------------------------------------------------- |
-| scene | setup、drawn、frame                                       |
-| key   | any、other keys is same as returned by `Keyboard.getKeys` |
-| mouse | left、right、middle                                       |
+| Type  | Name                                 |
+| ----- | ------------------------------------ |
+| scene | setup, drawn, frame                  |
+| key   | any, values from `keyboard.KeyPress` |
+| mouse | left, right, middle                  |
 
-these events will be triggered in the following order after the `show` method is executed:
+After calling `show`, events are triggered in the following order:
 
 ```mermaid
 graph TD
-initialize --> on_scene_setup --> first-draw --> on_scene_drawn --> c{whether to draw}
-c -->|no| stop-draw
-c -->|yes| on_scene_frame --> re-draw --> _["on_key_[name]<br>on_mouse_[name]"] --> c
+Initialization --> on_scene_setup --> FirstDrawing --> on_scene_drawn --> c{Draw?}
+c -->|No| Stop
+c -->|Yes| on_scene_frame --> Redraw --> _["on_key_[name]<br>on_mouse_[name]"] --> c
 ```
 
 ### Data
 
-scene will collect data automatically in showing:
-| name | description |
-| --------- | ---------------------------- |
-| show_time | first drawing timestamp |
-| events | interaction events list: keyboard events and mouse events |
+During scene presentation, data are collected automatically:
 
-we can access these data by `scene.get`:
+| Name      | Description                                  |
+| --------- | -------------------------------------------- |
+| show_time | timestamp of first flip                      |
+| events    | list of interaction events: keyboard & mouse |
+
+Data can be accessed via `scene.get`:
 
 ```python
 @ctx.scene(close_on=["key_f", "key_j"])
 def demo():
     return stim
 demo.show()
+
 close_event = demo.get("events")[-1]
-close_key = close_event.key.value
-close_time = close_event.timestamp - demo.get('show_time')
+close_key = close_event.data # keyboard.KeyPress
+close_time = demo.get("show_time") + close_event.rt
 ```
 
-we can also collect data manually:
+Manual data logging is also supported:
 
 ```python
 @ctx.scene(
-    on_key_f=lambda: demo.set('rt', core.getTime() - demo.get('show_time')),
+    on_key_f=lambda: demo.set('pressed_duration', demo.get('events')[-1].data.duration)),
 )
 def demo():
     return stim
 demo.show()
-rt = demo.get('rt')
+
+duration = demo.get('pressed_duration')
 ```
 
-## Shortcut
+## Shortcuts
 
-`Context` also provides some shortcut methods：
+`Context` provides shortcuts to simplify experiment writing:
 
 ```python
 ctx.text('Welcome to the experiment!', pos=(0, 0)).show() # show static text
-ctx.fixation(1).show()
-ctx.blank(1).show()
-ctx.addRow(a='', b=1, c=True) # collect data to ExperimentHandler
+ctx.record(a='', b=1, c=True) # record a row to ExperimentHandler
 ```
 
-## Best Practices
+## Examples
 
-### Separation of context and task
-
-It is recommended to write the task as a function,
-pass the experimental context as the first parameter,
-the task-specific parameters as the rest of the parameters,
-and return the experimental data.
+### Trial
 
 ```python
 from psychopy_scene import Context
+from psychopy import visual
 
-def task(ctx: Context, duration: float):
-    from psychopy.visual import TextStim
-
-    stim = TextStim(ctx.win, text="")
+def task(ctx: Context, duration = 1):
+    stim = visual.TextStim(ctx.win, text="")
     scene = ctx.scene(duration, on_scene_setup=lambda: stim)
     scene.show()
-    ctx.addRow(time=scene.get('show_time'))
+    ctx.record(time=scene.get('show_time'))
 ```
 
-### Focus only on task-related logic
-
-Task functions should not contain any logic that is not related to the task itself, for example:
-
-- Introductory and closing statements
-- Number of blocks
-- Data processing, analysis, presentation of results
-
-If there are no data dependencies between blocks,
-it is recommended to write the task function as a single block.
-For experiments that require the presentation of multiple blocks,
-consider the following example.
+### Block
 
 ```python
 from psychopy_scene import Context
-from psychopy.visual import Window
+from psychopy import visual
 
 def task(ctx: Context):
-    from psychopy.visual import TextStim
-
-    stim = TextStim(ctx.win, text="")
+    stim = visual.TextStim(ctx.win, text="")
     scene = ctx.scene(1, on_scene_setup=lambda: stim)
     scene.show()
-    ctx.addRow(time=scene.get('show_time'))
+    ctx.record(time=scene.get('show_time'))
 
-win = Window()
+win = visual.Window()
 data = []
 for block_index in range(10):
     ctx = Context(win)

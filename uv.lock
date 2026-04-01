@@ -3749,7 +3749,7 @@ wheels = [
 
 [[package]]
 name = "psychopy-scene"
-version = "0.2.0"
+version = "0.3.0"
 source = { editable = "." }
 dependencies = [
     { name = "psychopy", version = "2025.1.1", source = { registry = "https://mirrors.ustc.edu.cn/pypi/simple" }, marker = "python_full_version < '3.9'" },

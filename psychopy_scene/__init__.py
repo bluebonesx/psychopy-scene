@@ -1,68 +1,41 @@
 from __future__ import annotations
 
-import re
 from dataclasses import dataclass, field
-from typing import Any, Callable, Generic, Iterable, Protocol
+from functools import reduce
+from typing import Any, Callable, Final, Generic, Iterable, Protocol
 
-from psychopy import core, data, event, visual
-from psychopy.hardware import keyboard
+from psychopy import data, logging, visual
 from typing_extensions import ParamSpec
 
-__all__ = ["Listener", "Event", "EventEmitter", "DataCollector", "Scene", "Context"]
-
-S = ParamSpec("S")
+__all__ = ["Listener", "EventEmitter", "Drawable", "Component", "Scene", "Context"]
 P = ParamSpec("P")
-EVENT_NAME_RE = re.compile(
-    r"scene_(setup|drawn|frame)|mouse_(left|middle|right)|key_(any|(num_)?(\d|[a-z]+))"
-)
-MOUSE_BUTTONS = ("left", "middle", "right")
-Listener = Callable[[], Any]
+Listener = Callable[[Any], Any]
 
 
-@dataclass
-class Event:
-    data: Any
-    """keyboard events: `keyboard.KeyPress`, mouse events: str"""
-    rt: float
-
-
-@dataclass
 class EventEmitter:
-    listeners: dict[str, Listener] = field(default_factory=dict)
+    def __init__(self) -> None:
+        self.listeners: dict[str, set[Listener]] = {}
 
-    def on(self, name: str, listener: Listener):
-        """add listener. Raise `KeyError` if already defined, `ValueError` if invalid name."""
-        if self.listeners.get(name) is not None:
-            raise KeyError(f"{name} is already defined")
-        if EVENT_NAME_RE.fullmatch(name) is None:
-            raise ValueError(f"{name} is invalid name")
-        self.listeners[name] = listener
+    def on(self, type: str, listener: Listener):
+        listeners = self.listeners.get(type)
+        if listeners is None:
+            listeners = self.listeners[type] = set()
+        listeners.add(listener)
         return self
 
-    def off(self, name: str):
-        """remove listener. Do nothing if not found."""
-        self.listeners.pop(name, None)
+    def off(self, type: str, listener: Listener):
+        listeners = self.listeners.get(type)
+        if listeners is not None:
+            listeners.discard(listener)
+            if not listeners:
+                del self.listeners[type]
         return self
 
-    def emit(self, name: str):
-        """emit listener. Do nothing if not found."""
-        cb = self.listeners.get(name)
-        if cb is not None:
-            cb()
-        return self
-
-
-@dataclass
-class DataCollector:
-    data: dict[str, Any] = field(default_factory=dict)
-
-    def get(self, key: str):
-        """shortcut of `self.data[key]`"""
-        return self.data[key]
-
-    def set(self, key: str, value: Any):
-        """set data continuously"""
-        self.data[key] = value
+    def emit(self, type: str, evt: Any = None):
+        listeners = self.listeners.get(type)
+        if listeners:
+            for listener in list(listeners):
+                listener(evt)
         return self
 
 
@@ -70,122 +43,78 @@ class Drawable(Protocol):
     def draw(self) -> Any: ...
 
 
-class Scene(Generic[S], DataCollector, EventEmitter):
-    def __init__(self, env: "Context"):
-        DataCollector.__init__(self)
+class Component(Protocol[P]):
+    def __init__(self): ...
+    def __call__(self, *a: P.args, **b: P.kwargs) -> Drawable | Iterable[Drawable]: ...
+
+
+class Scene(Generic[P], EventEmitter):
+    def __init__(self, win: visual.Window, comp: Component[P] | type[Component[P]]):
         EventEmitter.__init__(self)
-        self.win = env.win
-        self.kbd = env.kbd
-        self.mouse = env.mouse
-        self.__shown = False
+        self.win = win
+        self.shown = False
         self.drawables: Iterable[Drawable] = []
-        self.config()
+        self.data: Final[dict[str, Any]] = {}
+        self.timer: Callable[[], bool] = lambda: False
+        self.component: Component[P] = comp() if isinstance(comp, type) else comp
+        setattr(self.component, "scene", self)
+        for key in dir(self.component):
+            if key.startswith("on_"):
+                self.on(key[3:], getattr(self.component, key))
 
-    def __call__(self, setup: Callable[P, Drawable | Iterable[Drawable]]) -> "Scene[P]":
-        return self.on("scene_setup", setup)  # pyright: ignore[reportReturnType]
-
-    def config(
-        self,
-        duration: float | None = None,
-        close_on: str | Iterable[str] | None = None,
-        **listeners: Listener,
-    ):
-        """configure the scene
-
-        :param duration: duration in seconds.
-        :param close_on: event types.
-
-        Example:
-        >>> scene.config(duration=1, close_on="key_escape", on_key_space=lambda: print("space pressed"))
-        """
-        self.duration = duration
-        if close_on:
-            if isinstance(close_on, str):
-                close_on = (close_on,)
-            for k in close_on:
-                self.on(k, self.close)
-        for k, v in listeners.items():
-            if not k.startswith("on_"):
-                raise ValueError(f"{k} should start with 'on_'")
-            self.on(k[3:], v)
-        return self
+    def use(self, *decorators: Callable[[Scene[P]], Scene[P]]):
+        return reduce(lambda _, e: e(self), decorators, self)
 
     def draw(self):
-        """draw all self.drawables"""
         for drawable in self.drawables:
             drawable.draw()
         return self
 
-    def show(self, *args: S.args, **kwargs: S.kwargs):
-        """show the scene with stimulus params"""
-        if self.__shown:
-            raise Exception(f"{self.__class__.__name__} has shown")
-        self.__shown = True
-        self.data = {}
-        self.kbd.clearEvents()
-        # emit on_scene_setup
-        cb = self.listeners.get("scene_setup")
-        if cb is None:
-            raise Exception("on_scene_setup is not defined")
-        results: Drawable | Iterable[Drawable] = cb(*args, **kwargs)
-        self.drawables = results if isinstance(results, Iterable) else (results,)
-        # reset clock
-        self.kbd.clock.reset()
-        self.mouse.clickReset()
-        # first draw
-        self.draw().win.flip()
-        self.set("show_time", core.getTime())
-        self.emit("scene_drawn")
-        # capture interaction events
-        events: list[Event] = []
-        self.set("events", events)
-        while self.__shown:
-            if (
-                self.duration is not None
-                and core.getTime() - self.get("show_time")
-                >= self.duration - self.win.monitorFramePeriod / 2
-            ):
-                self.close()
-            # redraw
-            self.emit("scene_frame")
-            self.draw().win.flip()
-            # listen to keyboard and mouse events
-            buttons, button_times = self.mouse.getPressed(getTime=True)
-            for key in self.kbd.getKeys():
-                events.append(Event(key, key.rt))
-                self.emit(f"key_{key.value}")
-                self.emit("key_any")
-            for index, name in enumerate(MOUSE_BUTTONS):
-                if buttons[index] == 1:  # pyright: ignore[reportIndexIssue]
-                    events.append(Event(name, button_times[index]))  # pyright: ignore[reportIndexIssue]
-                    self.emit(f"mouse_{name}")
-        return self
+    def update(self, *a: P.args, **b: P.kwargs):
+        drawable = self.component(*a, **b)
+        self.drawables = drawable if isinstance(drawable, Iterable) else (drawable,)
 
-    def close(self):
-        if not self.__shown:
-            raise RuntimeWarning(f"{self.__class__.__name__} has closed")
-        self.__shown = False
-        return self
+    def show(self, *a: P.args, **b: P.kwargs):
+        """
+        :lifecycle-hook show: before first flip
+        :lifecycle-hook flip: after first flip
+        :lifecycle-hook frame: before reflip
+        :lifecycle-hook poll: after reflip
+        :lifecycle-hook close: call `self.close`
+        """
+        self.shown = True
+        self.data.clear()
+        self.data["frame_times"] = []
+        self.update(*a, **b)
+        self.emit("show")
+        # first draw
+        if not self.win.waitBlanking:
+            logging.warning("Window.waitBlanking should be True")
+        self.data["frame_times"].append(self.draw().win.flip())
+        self.emit("flip")
+        # polling loop
+        while self.shown:
+            if self.timer():
+                self.close()
+                break
+            self.emit("frame")
+            self.data["frame_times"].append(self.draw().win.flip())
+            self.emit("poll")
+        return self.data.copy()
+
+    def close(self, *_):
+        self.shown = False
+        self.emit("close")
 
 
 @dataclass
 class Context:
-    win: visual.Window
-    kbd: keyboard.Keyboard = field(default_factory=keyboard.Keyboard)
-    mouse: event.Mouse = None  # pyright: ignore[reportAssignmentType]
+    win: visual.Window = field(default_factory=visual.Window)
     exp: data.ExperimentHandler = field(default_factory=data.ExperimentHandler)
 
-    def __post_init__(self):
-        self.mouse = self.mouse or event.Mouse(self.win)
-
-    @property
-    def scene(self):
-        return Scene(self).config
-
-    def text(self, *args, **kwargs):
-        """create static text scene quickly"""
-        stim = visual.TextStim(self.win, *args, **kwargs)
-        return self.scene()(lambda: stim)
+    def scene(self, comp: Component[P] | type[Component[P]]):
+        """create scene with component"""
+        return Scene(self.win, comp)
 
     def record(self, **kwargs: float | str | bool):
         """add a row to `self.exp`"""

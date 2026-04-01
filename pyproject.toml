@@ -1,6 +1,6 @@
 [project]
 name = "psychopy-scene"
-version = "0.2.0"
+version = "0.3.0"
 authors = [{ name = "cubx", email = "shawn6304@qq.com" }]
 description = "Lightweight framework for PsychoPy"
 readme = "README.md"

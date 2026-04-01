@@ -5,15 +5,15 @@
 
 [English](README.md) | 简体中文
 
-基于 [PsychoPy](https://github.com/psychopy/psychopy) 的轻量级实验框架，源码仅 **200 行**。
+基于 [PsychoPy](https://github.com/psychopy/psychopy) 的轻量级实验框架，核心源码 **<150 行**。
 
 > [!NOTE]
 > 本项目处于早期开发阶段，使用时请固定版本号。
 
 ## 特性
 
-- 轻量级：只有 1 个文件，无额外依赖项
-- 类型安全：所有参数均使用类型注解
+- 轻量级：只有 2 个文件，无额外依赖项
+- 类型安全：使用泛型进行类型推导
 - 新人友好：仅需掌握 `Context` 和 `Scene` 的概念即可上手
 
 ## 安装
@@ -33,8 +33,7 @@ pip install psychopy-scene
 from psychopy import visual, data
 from psychopy_scene import Context
 
-win = visual.Window()
-ctx = Context(win, exp=data.ExperimentHandler())
+ctx = Context(win=visual.Window(), exp=data.ExperimentHandler())
 ```
 
 ### 画面
@@ -44,83 +43,51 @@ ctx = Context(win, exp=data.ExperimentHandler())
 1. 创建画面
 2. 编写画面呈现逻辑
 
-画面提供了一些配置参数：
-
-- `duration`：持续时间，单位为秒
-- `close_on`：关闭画面的[事件](#事件)名称，比如`key_f`表示按下键盘`F`键关闭画面
-- `on_key_[name]`：当按下键盘上某个键时执行的函数
-- `on_mouse_[name]`：当按下鼠标某个键时执行的函数
-- `on_scene_[name]`：在画面的特定阶段发生时执行的函数
-
-创建画面仅需 1 个接受刺激参数并返回刺激的函数即可：
+通过装饰器创建画面：
 
 ```python
 from psychopy import visual
+from psychopy.hardware import keyboard
+from psychopy_scene.decorator import duration, hardware_keyboard
 
 # create stimulus
 stim_1 = visual.TextStim(ctx.win, text="Hello")
 stim_2 = visual.TextStim(ctx.win, text="World")
 
 # create scene
-@ctx.scene(
-    duration=1,
-    close_on=["key_f", "mouse_right"],
-    on_key_escape=lambda: print("escape key was pressed"),
-    on_mouse_left=lambda: print("left mouse button was pressed"),
-    on_scene_drawn=lambda: print("it will be called after first drawing"),
-    on_scene_frame=lambda: print("it will be called each frame"),
-)
-def demo(color: str, ori: float): # it will be used as on_scene_setup
-    print('it will be called before first drawing')
+@duration(1)
+@ctx.scene
+def demo_1(color: str, ori: float):
+    print('it will be called before first flip')
     stim_1.color = color
     stim_2.ori = ori
     return stim_1, stim_2
 
+@close_on('key_space')
+@hardware_keyboard()
+@ctx.scene
+class demo_2:
+    scene: Scene
+    def __call__(self, text: str):
+        stim_1.text = text
+        return stim_1
+    def on_key_space(self, evt: keyboard.KeyPress):
+        self.scene.data['rt'] = evt.tDown - self.scene.data['frame_times'][0]
+
 # show scene
-demo.show(color="red", ori=45)
+data_1 = demo_1.show(color="red", ori=45)
+data_2 = demo_2.show(text="test")
 ```
 
-画面还可以动态配置，这在一些场景中很有用，比如呈现时间不固定的画面：
+部分装饰器允许被覆盖，这在一些场景中很有用，比如呈现时间不固定的画面：
 
 ```python
-@ctx.scene()
+@duration(1)
+@ctx.scene
 def demo():
     return stim
-demo.config(duration=0.5).show()
-```
 
-这里的`demo.config`和`ctx.scene`的作用是完全等效的，他们的输入参数也完全一致。
-
-### 事件
-
-事件表示程序运行时的某个特定时机，比如按下某个键、鼠标点击等。
-要想在事件发生时执行一些操作，我们需要为事件添加回调函数：
-
-```python
-demo = ctx.scene(close_on="key_f") # or
-demo = ctx.scene(on_key_f=lambda: demo.close()) # or
-demo = ctx.scene().on("key_f", lambda: demo.close())
-```
-
-> [!WARNING]
-> 每种事件只能有一个回调函数，重复添加将报错。
-
-用于设置回调函数的参数名都遵循`on_[type]_[name]`的格式。
-目前画面支持的事件有：
-
-| 类型  | 名称                          |
-| ----- | ----------------------------- |
-| scene | setup、drawn、frame           |
-| key   | any、`keyboard.KeyPress` 取值 |
-| mouse | left、right、middle           |
-
-这些事件将在`show`方法执行后按顺序触发：
-
-```mermaid
-graph TD
-初始化 --> on_scene_setup --> 首次绘制 --> on_scene_drawn --> c{是否绘制}
-c -->|否| 停止绘制
-c -->|是| on_scene_frame --> 再次绘制 --> _["on_key_[name]<br>on_mouse_[name]"] --> c
+data = demo.use(duration(0.5)).show()
 ```
 
 ### 数据
@@ -128,42 +95,50 @@ c -->|是| on_scene_frame --> 再次绘制 --> _["on_key_[name]<br>on_mouse_[nam
 画面呈现过程中会自动收集数据：
 | 名称 | 描述 |
 | --------- | ---------------------------- |
-| show_time | 首次 filp 时间戳 |
-| events | 交互事件列表：键盘事件和鼠标事件 |
+| frame_times | 每帧 flip 时间戳 |
 
-我们可以通过 `scene.get` 访问这些数据：
+我们可以通过 `scene.data` 访问这些数据：
 
 ```python
-@ctx.scene(close_on=["key_f", "key_j"])
+@close_on('key_f', 'key_j')
+@hardware_keyboard()
+@ctx.scene
 def demo():
     return stim
-demo.show()
 
-close_event = demo.get("events")[-1]
-close_key = close_event.data # keyboard.KeyPress
-close_time = demo.get("show_time") + close_event.rt
+data = demo.show()
+show_time = data["frame_times"][0]
 ```
 
 我们还可以手动收集数据：
 
 ```python
-@ctx.scene(
-    on_key_f=lambda: demo.set('pressed_duration', demo.get('events')[-1].data.duration)),
-)
-def demo():
-    return stim
-demo.show()
+@hardware_keyboard()
+@ctx.scene
+class demo:
+    scene: Scene
+    def __call__(self):
+        return stim
+    def on_key_f(self, evt: keyboard.KeyPress):
+        self.scene.data['pressed_duration'] = evt.duration
 
-duration = demo.get('pressed_duration')
+data = demo.show()
+duration = data['pressed_duration']
 ```
 
-## 快捷方法
+### 事件
 
-`Context` 还提供了一些快捷方法，可以简化实验编写：
+事件表示程序运行时的某个特定时机，比如按下某个键、鼠标点击等。
+要想在事件发生时执行一些操作，我们需要为事件添加回调函数。
 
-```python
-ctx.text('Welcome to the experiment!', pos=(0, 0)).show() # show static text
-ctx.record(a='', b=1, c=True) # record a row to ExperimentHandler
+可使用的事件类型由装饰器提供：`hardware_keyboard`、`event_mouse`。
+这些事件将在`poll`画面生命周期触发：
+
+```mermaid
+graph LR
+初始化 --> `show` --> 首次绘制 --> `flip` --> c{是否绘制}
+c -->|否| 停止绘制
+c -->|是| 计时检测 --> `frame` --> 再次绘制 --> `poll` --> c
 ```
 
 ## 示例
@@ -171,27 +146,29 @@ ctx.record(a='', b=1, c=True) # record a row to ExperimentHandler
 ### Trial
 
 ```python
-from psychopy_scene import Context
 from psychopy import visual
+from psychopy_scene import Context
+from psychopy_scene.decorator import duration
 
-def task(ctx: Context, duration = 1):
+def task(ctx: Context, sec = 1):
     stim = visual.TextStim(ctx.win, text="")
-    scene = ctx.scene(duration, on_scene_setup=lambda: stim)
-    scene.show()
-    ctx.record(time=scene.get('show_time'))
+    scene = ctx.scene(lambda: stim).use(duration(sec))
+    data = scene.show()
+    ctx.record(time=data['frame_times'][0])
 ```
 
 ### Block
 
 ```python
-from psychopy_scene import Context
 from psychopy import visual
+from psychopy_scene import Context
+from psychopy_scene.decorator import duration
 
 def task(ctx: Context):
     stim = visual.TextStim(ctx.win, text="")
-    scene = ctx.scene(1, on_scene_setup=lambda: stim)
-    scene.show()
-    ctx.record(time=scene.get('show_time'))
+    scene = ctx.scene(lambda: stim).use(duration(1))
+    data = scene.show()
+    ctx.record(time=data['frame_times'][0])
 
 win = visual.Window()
 data = []

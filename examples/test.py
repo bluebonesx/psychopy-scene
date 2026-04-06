@@ -1,7 +1,9 @@
 from psychopy import visual, data
 from psychopy_scene import Context, Scene, decorator as deco
 
-ctx = Context(exp=data.ExperimentHandler(dataFileName='data.csv', autoLog=False))
+ctx = Context()
+ctx.exp.saveWideText = False
+ctx.exp.savePickle = False
 scene = lambda comp: ctx.scene(comp).use(
     deco.close_on('key_escape'),
     deco.hardware_keyboard(),

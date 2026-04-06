@@ -90,8 +90,8 @@ class event_mouse:
         buttons, button_times = self.mouse.getPressed(getTime=True)
         for index, name in enumerate(MOUSE_TYPES):
             if buttons[index] == 1:  # pyright: ignore[reportIndexIssue]
-                evt = { "name": name, "rt": button_times[index] }
-                s.emit(f"mouse_{name}", evt).emit('mouse_any', evt)  # pyright: ignore[reportIndexIssue]
+                evt = {"name": name, "rt": button_times[index]}  # pyright: ignore[reportIndexIssue]
+                s.emit(f"mouse_{name}", evt).emit("mouse_any", evt)
 
     def __call__(self, s: Scene[P]) -> Scene[P]:
         if not hasattr(self, "mouse"):

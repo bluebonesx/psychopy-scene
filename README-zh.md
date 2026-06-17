@@ -5,7 +5,7 @@
 
 [English](README.md) | 简体中文
 
-基于 [PsychoPy](https://github.com/psychopy/psychopy) 的轻量级实验框架，核心源码 **<150 行**。
+一个基于画面的轻量级 [PsychoPy](https://github.com/psychopy/psychopy) 框架。
 
 > [!NOTE]
 > 本项目处于早期开发阶段，使用时请固定版本号。

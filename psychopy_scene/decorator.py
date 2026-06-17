@@ -9,12 +9,12 @@ __all__ = ["frames", "duration", "close_on", "hardware_keyboard", "event_mouse"]
 MOUSE_TYPES = ("left", "middle", "right")
 
 
-def frames(times: int) -> Callable[[Scene[P]], Scene[P]]:
+def frames(n_frames: int) -> Callable[[Scene[P]], Scene[P]]:
     """Change `scene.timer`"""
 
-    def wrapper(self: Scene):
-        self.timer = lambda: len(self.data["frame_times"]) >= times
-        return self
+    def wrapper(s: Scene):
+        s.timer = lambda: len(s.data["frame_times"]) >= n_frames
+        return s
 
     return wrapper
 
@@ -22,13 +22,13 @@ def frames(times: int) -> Callable[[Scene[P]], Scene[P]]:
 def duration(duration: float) -> Callable[[Scene[P]], Scene[P]]:
     """Change `scene.timer`"""
 
-    def wrapper(self: Scene):
-        self.timer = lambda: (
+    def wrapper(s: Scene):
+        s.timer = lambda: (
             duration is not None
-            and core.getTime() - self.data["frame_times"][0]
-            >= duration - self.win.monitorFramePeriod / 2
+            and core.getTime() - s.data["frame_times"][0]
+            >= duration - s.win.monitorFramePeriod / 2
         )
-        return self
+        return s
 
     return wrapper
 
@@ -36,10 +36,10 @@ def duration(duration: float) -> Callable[[Scene[P]], Scene[P]]:
 def close_on(*types: str) -> Callable[[Scene[P]], Scene[P]]:
     """Add close listeners"""
 
-    def wrapper(self: Scene):
+    def wrapper(s: Scene):
         for k in types:
-            self.on(k, self.close)
-        return self
+            s.on(k, s.close)
+        return s
 
     return wrapper
 

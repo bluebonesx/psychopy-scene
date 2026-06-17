@@ -63,7 +63,7 @@ class Scene(Generic[P], EventEmitter):
                 self.on(key[3:], getattr(self.component, key))
 
     def use(self, *decorators: Callable[[Scene[P]], Scene[P]]):
-        return reduce(lambda _, e: e(self), decorators, self)
+        return reduce(lambda s, deco: deco(s), decorators, self)
 
     def draw(self):
         for drawable in self.drawables:

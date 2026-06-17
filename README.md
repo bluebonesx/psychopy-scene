@@ -3,9 +3,9 @@
 ![PyPI - Version](https://img.shields.io/pypi/v/psychopy-scene)
 ![PyPI - Downloads](https://img.shields.io/pypi/dm/psychopy-scene)
 
-English | [简体中文](README_zh.md)
+English | [简体中文](README-zh.md)
 
-A lightweight experimental framework based on [PsychoPy](https://github.com/psychopy/psychopy), with core source code **< 150 lines**.
+A scene-based lightweight framework for [PsychoPy](https://github.com/psychopy/psychopy).
 
 > [!NOTE]
 > This project is in its early stages of development. Please pin the version number when using it.

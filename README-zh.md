@@ -5,7 +5,7 @@
 
 [English](README.md) | 简体中文
 
-一个基于画面的轻量级 [PsychoPy](https://github.com/psychopy/psychopy) 框架。
+基于 Scene 架构的轻量级框架，for [PsychoPy](https://github.com/psychopy/psychopy)
 
 > [!NOTE]
 > 本项目处于早期开发阶段，使用时请固定版本号。
@@ -13,7 +13,7 @@
 ## 特性
 
 - 轻量级：只有 2 个文件，无额外依赖项
-- 类型安全：使用泛型进行类型推导
+- 类型安全：泛型支持
 - 新人友好：仅需掌握 `Context` 和 `Scene` 的概念即可上手
 
 ## 安装
@@ -24,9 +24,9 @@ pip install psychopy-scene
 
 ## 快速上手
 
-### 实验上下文
+### 上下文
 
-实验上下文 `Context` 表示实验的全局参数，包括环境参数和任务参数。
+`Context` 用于封装画面 scene 间共享的数据，比如绘制窗口 `Window`。
 编写实验的第一步，就是创建实验上下文。
 
 ```python
@@ -38,7 +38,7 @@ ctx = Context(win=visual.Window(), exp=data.ExperimentHandler())
 
 ### 画面
 
-实验可以被当作一系列画面 `scene` 的组合，编写实验程序只需要 2 步：
+实验可以被当作一系列画面 scene 的组合，编写实验程序只需要 2 步：
 
 1. 创建画面
 2. 编写画面呈现逻辑
@@ -79,7 +79,12 @@ data_1 = demo_1.show(color="red", ori=45)
 data_2 = demo_2.show(text="test")
 ```
 
-部分装饰器允许被覆盖，这在一些场景中很有用，比如呈现时间不固定的画面：
+> [!IMPORTANT]
+> 装饰器会改变 scene 的状态，它们通过 scene 实例暴露的 api 实现这点
+
+时间相关的装饰器会相互覆盖，因为它们通过设置 scene.timer 属性起作用。
+
+这在一些场景中很有用，比如呈现时间不固定的画面：
 
 ```python
 @duration(1)
@@ -92,12 +97,13 @@ data = demo.use(duration(0.5)).show()
 
 ### 数据
 
-画面呈现过程中会自动收集数据：
-| 名称 | 描述 |
-| --------- | ---------------------------- |
+scene 会自动收集数据：
+
+| 名称        | 描述             |
+| ----------- | ---------------- |
 | frame_times | 每帧 flip 时间戳 |
 
-我们可以通过 `scene.data` 访问这些数据：
+可以通过 `scene.data` 访问这些数据：
 
 ```python
 @close_on('key_f', 'key_j')
@@ -106,11 +112,11 @@ data = demo.use(duration(0.5)).show()
 def demo():
     return stim
 
-data = demo.show()
+data = demo.show() # just a dict
 show_time = data["frame_times"][0]
 ```
 
-我们还可以手动收集数据：
+也支持手动收集数据：
 
 ```python
 @hardware_keyboard()
@@ -128,18 +134,25 @@ duration = data['pressed_duration']
 
 ### 事件
 
-事件表示程序运行时的某个特定时机，比如按下某个键、鼠标点击等。
-要想在事件发生时执行一些操作，我们需要为事件添加回调函数。
+事件表示 scene 呈现时的某个特定时机，比如按下某个键、鼠标点击等。
+要想在事件发生时执行一些操作，我们需要为事件添加回调函数:
 
-可使用的事件类型由装饰器提供：`hardware_keyboard`、`event_mouse`。
-这些事件将在`poll`画面生命周期触发：
+```py
+scene.on('show', lambda _: print('do something'));
+```
+
+这是 scene 全部内置事件及其触发时机：
 
 ```mermaid
-graph LR
-初始化 --> `show` --> 首次绘制 --> `flip` --> c{是否绘制}
-c -->|否| 停止绘制
-c -->|是| 计时检测 --> `frame` --> 再次绘制 --> `poll` --> c
+graph TD
+初始化 --> s((show)) --> 首次绘制 --> f((flipped)) --> c{是否绘制？}
+c -->|否| 停止
+c -->|是| 计时检测 --> a((frame)) --> 重绘 --> p((poll)) --> c
 ```
+
+有些事件类型由输入设备相关的装饰器提供，比如 `hardware_keyboard` 提供了对 `key_space` 事件的支持，让那些通过 `scene.on('key_space', ...)` 添加的回调函数能在按下 `sapce` 键被触发。
+
+这些装饰器会在 `poll` 事件触发时通过 `scene.emit('key_space', ...)` 触发其他事件，实现对某些事件的支持。
 
 ## 示例
 

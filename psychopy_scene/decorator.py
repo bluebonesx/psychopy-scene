@@ -1,11 +1,9 @@
-from __future__ import annotations
-
 from psychopy import core, event
 from psychopy.hardware import keyboard
 
 from . import Callable, P, Scene
 
-__all__ = ["frames", "duration", "close_on", "hardware_keyboard", "event_mouse"]
+__all__ = ["close_on", "duration", "event_mouse", "frames", "hardware_keyboard"]
 MOUSE_TYPES = ("left", "middle", "right")
 
 
@@ -87,7 +85,7 @@ class event_mouse:
             self.mouse = mouse
 
     def poll(self, s: Scene):
-        buttons, button_times = self.mouse.getPressed(getTime=True)
+        buttons, button_times = self.mouse.getPressed(getTime=True)  # pyright: ignore[reportGeneralTypeIssues]
         for index, name in enumerate(MOUSE_TYPES):
             if buttons[index] == 1:  # pyright: ignore[reportIndexIssue]
                 evt = {"name": name, "rt": button_times[index]}  # pyright: ignore[reportIndexIssue]

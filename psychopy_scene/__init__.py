@@ -1,13 +1,12 @@
-from __future__ import annotations
-
+from collections.abc import Callable, Iterable
 from dataclasses import dataclass, field
 from functools import reduce
-from typing import Any, Callable, Final, Generic, Iterable, Protocol
+from typing import Any, Final, Generic, Protocol
 
 from psychopy import data, logging, visual
-from typing_extensions import ParamSpec
+from typing_extensions import ParamSpec, Self
 
-__all__ = ["Listener", "EventEmitter", "Drawable", "Component", "Scene", "Context"]
+__all__ = ["Component", "Context", "Drawable", "EventEmitter", "Listener", "Scene"]
 P = ParamSpec("P")
 Listener = Callable[[Any], Any]
 
@@ -16,14 +15,14 @@ class EventEmitter:
     def __init__(self) -> None:
         self.listeners: dict[str, set[Listener]] = {}
 
-    def on(self, type: str, listener: Listener):
+    def on(self, type: str, listener: Listener) -> Self:
         listeners = self.listeners.get(type)
         if listeners is None:
             listeners = self.listeners[type] = set()
         listeners.add(listener)
         return self
 
-    def off(self, type: str, listener: Listener):
+    def off(self, type: str, listener: Listener) -> Self:
         listeners = self.listeners.get(type)
         if listeners is not None:
             listeners.discard(listener)
@@ -31,7 +30,7 @@ class EventEmitter:
                 del self.listeners[type]
         return self
 
-    def emit(self, type: str, evt: Any = None):
+    def emit(self, type: str, evt: Any = None) -> Self:
         listeners = self.listeners.get(type)
         if listeners:
             for listener in list(listeners):
@@ -48,7 +47,7 @@ class Component(Protocol[P]):
     def __call__(self, *a: P.args, **b: P.kwargs) -> Drawable | Iterable[Drawable]: ...
 
 
-class Scene(Generic[P], EventEmitter):
+class Scene(EventEmitter, Generic[P]):
     def __init__(self, win: visual.Window, comp: Component[P] | type[Component[P]]):
         EventEmitter.__init__(self)
         self.win = win
@@ -57,15 +56,15 @@ class Scene(Generic[P], EventEmitter):
         self.data: Final[dict[str, Any]] = {}
         self.timer: Callable[[], bool] = lambda: False
         self.component: Component[P] = comp() if isinstance(comp, type) else comp
-        setattr(self.component, "scene", self)
+        self.component.scene = self  # ty: ignore[unresolved-attribute]  # pyright: ignore[reportAttributeAccessIssue]
         for key in dir(self.component):
             if key.startswith("on_"):
                 self.on(key[3:], getattr(self.component, key))
 
-    def use(self, *decorators: Callable[[Scene[P]], Scene[P]]):
-        return reduce(lambda s, deco: deco(s), decorators, self)
+    def use(self, *decorators: Callable[["Scene[P]"], "Scene[P]"]) -> Self:
+        return reduce(lambda s, deco: deco(s), decorators, self)  # ty: ignore[invalid-argument-type]  # pyright: ignore[reportReturnType]
 
-    def draw(self):
+    def draw(self) -> Self:
         for drawable in self.drawables:
             drawable.draw()
         return self
@@ -74,10 +73,10 @@ class Scene(Generic[P], EventEmitter):
         drawable = self.component(*a, **b)
         self.drawables = drawable if isinstance(drawable, Iterable) else (drawable,)
 
-    def show(self, *a: P.args, **b: P.kwargs):
+    def show(self, *a: P.args, **b: P.kwargs) -> dict[str, Any]:
         """
         :lifecycle-hook show: before first flip
-        :lifecycle-hook flip: after first flip
+        :lifecycle-hook flipped: after first flip
         :lifecycle-hook frame: before reflip
         :lifecycle-hook poll: after reflip
         :lifecycle-hook close: call `self.close`
@@ -91,7 +90,7 @@ class Scene(Generic[P], EventEmitter):
         if not self.win.waitBlanking:
             logging.warning("Window.waitBlanking should be True")
         self.data["frame_times"].append(self.draw().win.flip())
-        self.emit("flip")
+        self.emit("flipped")
         # polling loop
         while self.shown:
             if self.timer():
@@ -112,7 +111,7 @@ class Context:
     win: visual.Window = field(default_factory=visual.Window)
     exp: data.ExperimentHandler = field(default_factory=data.ExperimentHandler)
 
-    def scene(self, comp: Component[P] | type[Component[P]]):
+    def scene(self, comp: Component[P] | type[Component[P]]) -> Scene[P]:
         """create scene with component"""
         return Scene(self.win, comp)
 

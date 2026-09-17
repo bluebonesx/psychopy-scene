@@ -3,16 +3,33 @@ from psychopy.hardware import keyboard
 
 from . import Callable, P, Scene
 
-__all__ = ["close_on", "duration", "event_mouse", "frames", "hardware_keyboard"]
+__all__ = [
+    "close_on",
+    "duration",
+    "event_mouse",
+    "frames",
+    "hardware_keyboard",
+    "record_frames",
+]
 MOUSE_TYPES = ("left", "middle", "right")
 
 
+def record_frames(s: Scene[P]) -> Scene[P]:
+    """record all frame times to `scene.data['frame_times']`"""
+    record = lambda t: s.data.setdefault("frame_times", []).append(t)
+    return s.on("drawn", record).on("redraw", record)
+
+
 def frames(n_frames: int) -> Callable[[Scene[P]], Scene[P]]:
-    """Change `scene.timer`"""
+    """Change `scene.timer`: close the scene after `n_frames` frames"""
 
     def wrapper(s: Scene):
-        s.timer = lambda: len(s.data["frame_times"]) >= n_frames
-        return s
+        def timer() -> bool:
+            s.data["n_frames"] += 1
+            return s.data["n_frames"] >= n_frames
+
+        s.timer = timer
+        return s.on("drawn", lambda _: s.data.setdefault("n_frames", 0))
 
     return wrapper
 
@@ -22,8 +39,7 @@ def duration(duration: float) -> Callable[[Scene[P]], Scene[P]]:
 
     def wrapper(s: Scene):
         s.timer = lambda: (
-            duration is not None
-            and core.getTime() - s.data["frame_times"][0]
+            core.getTime() - s.data["start_time"]
             >= duration - s.win.monitorFramePeriod / 2
         )
         return s
@@ -63,9 +79,10 @@ class hardware_keyboard:
             s.emit(f"key_{key.value}", key).emit("key_any", key)
 
     def __call__(self, s: Scene[P]) -> Scene[P]:
-        return s.on("show", lambda _: self.kb.clearEvents()).on(
-            "poll", lambda _: self.poll(s)
-        )
+        return s.on(
+            "show",
+            lambda _: self.kb.clearEvents(),
+        ).on("redraw", lambda _: self.poll(s))
 
 
 class event_mouse:
@@ -94,6 +111,7 @@ class event_mouse:
     def __call__(self, s: Scene[P]) -> Scene[P]:
         if not hasattr(self, "mouse"):
             event_mouse.mouse = event.Mouse(s.win)
-        return s.on("show", lambda _: s.win.callOnFlip(self.mouse.clickReset)).on(
-            "poll", lambda _: self.poll(s)
-        )
+        return s.on(
+            "show",
+            lambda _: s.win.callOnFlip(self.mouse.clickReset),
+        ).on("redraw", lambda _: self.poll(s))

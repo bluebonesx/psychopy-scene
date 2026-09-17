@@ -37,7 +37,7 @@ result = fixation.show(condition)
 ## 安装
 
 ```bash
-pip install psychopy-scene>=0.3,<0.4
+pip install psychopy-scene>=0.4,<0.5
 ```
 
 ## 快速上手
@@ -85,7 +85,7 @@ class demo_2:
         stim_1.text = text
         return stim_1
     def on_key_space(self, evt: keyboard.KeyPress):
-        self.scene.data['rt'] = evt.tDown - self.scene.data['frame_times'][0]
+        self.scene.data['rt'] = evt.tDown - self.scene.data['start_time']
 
 # show scene
 data_1 = demo_1.show(color="red", ori=45)
@@ -125,7 +125,7 @@ def demo():
 
 ### 实验记录
 
-画面会自动收集每帧 flip 时间戳，可以通过 `scene.data['frame_times']` 获取：
+scene 会自动记录首次 flip 时间戳，可通过 `data['start_time']` 获取：
 
 ```python
 @close_on('key_f', 'key_j')
@@ -135,7 +135,16 @@ def demo():
     return stim
 
 data = demo.show() # just a dict
-show_time = data["frame_times"][0]
+onset = data['start_time']
+```
+
+用 `record_frames` 装饰器收集完整帧时间戳列表：
+
+```python
+from psychopy_scene.decorator import record_frames
+
+data = demo.use(record_frames).show()
+frame_times = data['frame_times']
 ```
 
 也支持手动收集自定义数据：
@@ -167,14 +176,17 @@ scene.on('show', lambda _: print('do something'));
 
 ```mermaid
 graph TD
-初始化 --> s((show)) --> 首次绘制 --> f((flipped)) --> c{是否绘制？}
+初始化 --> s((show)) --> 首次绘制 --> d((drawn)) --> c{是否绘制？}
 c -->|否| 停止
-c -->|是| 计时检测 --> a((frame)) --> 重绘 --> p((poll)) --> c
+c -->|是| 计时检测 --> 重绘 --> r((redraw)) --> c
 ```
+
+在 `drawn` 和 `redraw` 期间会把对应的帧时间戳作为事件值传出，
+第一次的帧时间也会存放在 `data['start_time']` 中。
 
 输入设备相关的装饰器能提供额外的事件支持，比如 `hardware_keyboard` 提供了 `key_space` 事件，让那些使用 `scene.on('key_space', ...)` 添加的回调函数能在按下 `space` 键时被触发执行。
 
-这些装饰器会在 `poll` 事件触发时通过 `scene.emit('key_space', ...)` 触发其他事件，实现对某些事件的支持。
+这些装饰器会在 `redraw` 事件触发时通过 `scene.emit('key_space', ...)` 触发其他事件，实现对某些事件的支持。
 
 ## 示例
 
@@ -191,7 +203,7 @@ def trial(ctx: Context, sec = 1):
     stim = visual.TextStim(ctx.win, text="")
     scene = ctx.scene(lambda: stim).use(duration(sec))
     data = scene.show()
-    ctx.record(time=data['frame_times'][0])
+    ctx.record(time=data['start_time'])
 ```
 
 ### Block
@@ -205,7 +217,7 @@ def trial(ctx: Context):
     stim = visual.TextStim(ctx.win, text="")
     scene = ctx.scene(lambda: stim).use(duration(1))
     data = scene.show()
-    ctx.record(time=data['frame_times'][0])
+    ctx.record(time=data['start_time'])
 
 win = visual.Window()
 data = []

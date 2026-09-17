@@ -37,7 +37,7 @@ result = fixation.show(condition)
 ## Installation
 
 ```bash
-pip install "psychopy-scene>=0.3,<0.4"
+pip install "psychopy-scene>=0.4,<0.5"
 ```
 
 ## Quick Start
@@ -90,7 +90,7 @@ class demo_2:
 
     def on_key_space(self, evt: keyboard.KeyPress):
         self.scene.data["rt"] = (
-            evt.tDown - self.scene.data["frame_times"][0]
+            evt.tDown - self.scene.data["start_time"]
         )
 
 # show scenes
@@ -131,7 +131,7 @@ def demo():
 
 ### Data
 
-A Scene automatically records the timestamp of every frame flip. These timestamps are available through `scene.data["frame_times"]`:
+A Scene records the moment it appeared on screen — the first frame flip timestamp (stimulus onset) — as `data["start_time"]`. It is always available, with no setup:
 
 ```python
 @close_on("key_f", "key_j")
@@ -141,7 +141,30 @@ def demo():
     return stim
 
 data = demo.show()  # just a dict
-show_time = data["frame_times"][0]
+onset = data["start_time"]
+```
+
+Every frame flip timestamp is also delivered as the value of the `drawn`/`redraw` events, so you can collect exactly what you need without paying for storage you don't use:
+
+```python
+@ctx.scene
+class demo:
+    scene: Scene
+
+    def __call__(self):
+        return stim
+
+    def on_redraw(self, t: float):
+        self.scene.data["last_flip"] = t
+```
+
+If you want the full list of flip timestamps, opt in with the `record_frames` decorator:
+
+```python
+from psychopy_scene.decorator import record_frames
+
+data = demo.use(record_frames).show()
+frame_times = data["frame_times"]
 ```
 
 You can also collect custom data manually:
@@ -176,14 +199,16 @@ These are the built-in Scene events and their timing:
 
 ```mermaid
 graph TD
-Init --> s((show)) --> First-draw --> f((flipped)) --> c{should draw?}
+Init --> s((show)) --> First-draw --> d((drawn)) --> c{should draw?}
 c -->|No| Stop
-c -->|Yes| Timer-check --> a((frame)) --> Re-draw --> p((poll)) --> c
+c -->|Yes| Timer-check --> Re-draw --> r((redraw)) --> c
 ```
+
+The `drawn` and `redraw` events carry the corresponding flip timestamp as their value. The first one is also stored in `data["start_time"]`.
 
 Input-related decorators can provide additional events. For example, `hardware_keyboard` provides the `key_space` event, allowing callbacks registered with `scene.on("key_space", ...)` to run when the `Space` key is pressed.
 
-These decorators listen to the `poll` event and use `scene.emit("key_space", ...)` to emit additional events.
+These decorators listen to the `redraw` event and use `scene.emit("key_space", ...)` to emit additional events.
 
 ## Examples
 
@@ -200,7 +225,7 @@ def trial(ctx: Context, sec=1):
     stim = visual.TextStim(ctx.win, text="")
     scene = ctx.scene(lambda: stim).use(duration(sec))
     data = scene.show()
-    ctx.record(time=data["frame_times"][0])
+    ctx.record(time=data["start_time"])
 ```
 
 ### Block
@@ -214,7 +239,7 @@ def trial(ctx: Context):
     stim = visual.TextStim(ctx.win, text="")
     scene = ctx.scene(lambda: stim).use(duration(1))
     data = scene.show()
-    ctx.record(time=data["frame_times"][0])
+    ctx.record(time=data["start_time"])
 
 win = visual.Window()
 data = []

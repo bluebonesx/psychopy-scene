@@ -75,30 +75,28 @@ class Scene(EventEmitter, Generic[P]):
 
     def show(self, *a: P.args, **b: P.kwargs) -> dict[str, Any]:
         """
-        :lifecycle-hook show: before first flip
-        :lifecycle-hook flipped: after first flip
-        :lifecycle-hook frame: before reflip
-        :lifecycle-hook poll: after reflip
-        :lifecycle-hook close: call `self.close`
+        :event-type show: before first flip
+        :event-type drawn: after first flip
+        :event-value drawn: first frame time `data["start_time"]`
+        :event-type redraw: after reflip
+        :event-value redraw: frame time
+        :event-type close: call `self.close`
         """
         self.shown = True
         self.data.clear()
-        self.data["frame_times"] = []
         self.update(*a, **b)
         self.emit("show")
         # first draw
         if not self.win.waitBlanking:
             logging.warning("Window.waitBlanking should be True")
-        self.data["frame_times"].append(self.draw().win.flip())
-        self.emit("flipped")
+        self.data["start_time"] = self.draw().win.flip()
+        self.emit("drawn", self.data["start_time"])
         # polling loop
         while self.shown:
             if self.timer():
                 self.close()
                 break
-            self.emit("frame")
-            self.data["frame_times"].append(self.draw().win.flip())
-            self.emit("poll")
+            self.emit("redraw", self.draw().win.flip())
         return self.data.copy()
 
     def close(self, *_):

@@ -41,6 +41,7 @@ class test_mouse:
         bot_stim.text = e
 
 
+@deco.record_frames
 @ctx.scene
 class test_duration:
     scene: Scene
@@ -50,9 +51,9 @@ class test_duration:
         bot_stim.text = ""
         return top_stim, bot_stim
 
-    def on_frame(self, _):
+    def on_redraw(self, t: float):
         frame_times = self.scene.data["frame_times"]
-        bot_stim.text = f"frames: {len(frame_times)}\nduration: {frame_times[-1] - frame_times[0]:.2f}"
+        bot_stim.text = f"n_frames: {len(frame_times)}\nduration: {t - self.scene.data['start_time']:.2f}"
 
 
 test_duration.use(deco.duration(2)).show()

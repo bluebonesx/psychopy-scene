@@ -31,8 +31,7 @@ class gng:
         return stim
 
     def on_key_space(self, evt: keyboard.KeyPress):
-        show_time = self.scene.data["frame_times"][0]
-        self.scene.data["rt"] = evt.tDown - show_time
+        self.scene.data["rt"] = evt.tDown - self.scene.data["start_time"]
 
 
 # feedback

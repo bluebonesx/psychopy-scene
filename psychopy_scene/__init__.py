@@ -77,7 +77,7 @@ class Scene(EventEmitter, Generic[P]):
         """
         :event-type show: before first flip
         :event-type drawn: after first flip
-        :event-value drawn: first frame time `data["start_time"]`
+        :event-value drawn: first frame time, the same as `data["start_time"]`
         :event-type redraw: after reflip
         :event-value redraw: frame time
         :event-type close: call `self.close`

@@ -29,7 +29,7 @@ def frames(n_frames: int) -> Callable[[Scene[P]], Scene[P]]:
             return s.data["n_frames"] >= n_frames
 
         s.timer = timer
-        return s.on("drawn", lambda _: s.data.setdefault("n_frames", 0))
+        return s.on("drawn", lambda _: s.data.update(n_frames=0))
 
     return wrapper
 
